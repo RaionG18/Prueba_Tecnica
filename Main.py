@@ -13,6 +13,15 @@ from openpyxl.utils.cell import coordinate_from_string as cfs
 from openpyxl.utils.cell import get_column_letter as gcl
 from urllib.parse import urljoin
 
+from datetime import datetime, timedelta
+import winreg
+
+def getListSeparator():
+    '''Retrieves the Windows list separator character from the registry'''
+    aReg = winreg.ConnectRegistry(None, winreg.HKEY_CURRENT_USER)
+    aKey = winreg.OpenKey(aReg, r"Control Panel\International")
+    return winreg.QueryValueEx(aKey, "sList")[0]
+
 # Configuración
 base_url = 'https://www.amm.org.gt/pdfs2/programas_despacho/'
 dir1_url = '01_PROGRAMAS_DE_DESPACHO_DIARIO'
@@ -36,7 +45,18 @@ def convert_rng_to_df(tlc, l_col, l_row, sheet):
     
     return pd.DataFrame(data_rows[2:], columns=data_rows[0])
 
-def descargar_excel(url, nombre_archivo):
+def generar_dataframe(fecha_inicio, fecha_final):
+    # Convertir las cadenas de fecha a objetos datetime
+    fecha_inicio = datetime.strptime(fecha_inicio, '%Y-%m-%d %H:%M:%S')
+    fecha_final = datetime.strptime(fecha_final, '%Y-%m-%d %H:%M:%S')
+
+    # Crear un rango de fechas intermedias con intervalo de 1 hora
+    delta = timedelta(hours=1)  # Intervalo de 1 hora
+    fechas_intermedias = [fecha_inicio + i * delta for i in range(int((fecha_final - fecha_inicio) / delta)+1)]
+
+    return pd.DataFrame({'Fecha_Hora': fechas_intermedias})
+
+def descargar_excel(url, nombre_archivo, fecha_actual):
     try:
         response = requests.get(url)
         response.raise_for_status()  # Lanza una excepción para códigos de estado no exitosos
@@ -74,6 +94,33 @@ def descargar_excel(url, nombre_archivo):
                 # print(f"Range to convert for '{tblname}' is: '{tlc}:{last_col}{last_row}'")
                 df_dict[tblname] = convert_rng_to_df(tlc, last_col, last_row, sheet)  # Convert to dataframe
                 df_dict[tblname]["Planta Generadora"] = df_dict[tblname]["Planta Generadora"].apply(unidecode.unidecode)
+                df_dict[tblname] = df_dict[tblname][df_dict[tblname]["Nemo"] == "JEN-C"]
+                df_dict[tblname]["Banda"] = unidecode.unidecode(tblname)
+
+                tblname_normalized = unidecode.unidecode(tblname)
+
+                banda_mapping = {
+                    "DEMANDA MINIMA": (("00:00:00", "05:00:00"), ("22:00:00", "23:00:00")),
+                    "DEMANDA MEDIA": (("06:00:00", "17:00:00"),),
+                    "DEMANDA MAXIMA": (("18:00:00", "21:00:00"),)
+                    }
+
+                tblname_normalized = unidecode.unidecode(tblname)
+
+                # Crear un DataFrame vacío
+                df_resultante = pd.DataFrame()
+                if tblname_normalized in banda_mapping:
+                    horas_intervalos = banda_mapping[tblname_normalized]
+
+                    for hora_inicio, hora_final in horas_intervalos:
+                        # Generar el DataFrame
+                        df_temporal = generar_dataframe(f'{fecha_actual} {hora_inicio}', f'{fecha_actual} {hora_final}')
+                        df_resultante = pd.concat([df_resultante, df_temporal], ignore_index=True)
+
+                    df_resultante["Banda"] = tblname_normalized
+                    df_dict[tblname] = pd.merge(df_dict[tblname], df_resultante, on='Banda')
+                else:
+                    pass
 
 
         print("\n")
@@ -83,9 +130,17 @@ def descargar_excel(url, nombre_archivo):
         
         ### Print the DataFrames
         nombre_archivo_corrected = nombre_archivo.replace(".xlsx", "")
+        df_resultado = pd.DataFrame()
         for table_name, df in df_dict.items():
-            df.to_csv(f"{nombre_archivo_corrected}_{table_name}.csv", index=False)
-            print(f'Archivo "{nombre_archivo_corrected}_{table_name}.csv" guardado exitosamente.')
+            df_resultado = pd.concat([df_resultado, df], ignore_index=True)
+
+        df_resultado.columns = df.columns.str.strip()
+        df_resultado = df_resultado.rename(columns={'Costo en US$/MWH': 'Costo'})
+        df_resultado = df_resultado[['Fecha_Hora', 'Nemo', 'Planta Generadora', 'Potencia Disponible', 'Costo', 'FPNE', 'Banda']]
+        df_resultado = df_resultado.sort_values(by='Fecha_Hora')
+        
+        df_resultado.to_csv(f"{nombre_archivo_corrected}_DEMANDAS.csv", index=False, sep=getListSeparator())
+        print(f'Archivo "{nombre_archivo_corrected}_DEMANDAS.csv" guardado exitosamente.')
         print("----------------------------------\n")
             
     except requests.exceptions.HTTPError as errh:
@@ -120,7 +175,7 @@ def descargar_archivos_por_fecha(base_url, dir1_url, dir2_url, fecha_inicial, fe
         nombre_local_excel = url_dir
 
         # Descargar el archivo descomentando la siguiente línea cuando estés listo
-        descargar_excel(url_descarga, nombre_local_excel)
+        descargar_excel(url_descarga, nombre_local_excel, fecha_actual.date())
 
         # Agrega un retraso entre solicitudes para simular comportamiento humano
         time.sleep(2)  # Ajusta el valor según sea necesario
