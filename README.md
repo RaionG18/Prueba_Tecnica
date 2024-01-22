@@ -1,6 +1,9 @@
 # Prueba Tecnica
 <p align="justify">
-Este repositorio contiene los script y archivos utilizados para completar la prueba tecnica. Al correr el programa main.py, se comenzara con la descarga de los archivos, se guardaran en un directorio y por ultimo se generara un archivo .csv con el resumen de todos los calculos.
+Este repositorio contiene los script y archivos utilizados para completar la prueba tecnica. 
+
+# Funcionamiento
+Al correr el programa main.py, se comenzara con la descarga de los archivos, se guardaran en un directorio y por ultimo se generara un archivo .csv con el resumen de todos los calculos.
 </p>
 
 # Librerias de Terceros Utilizadas
