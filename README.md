@@ -3,7 +3,7 @@
 Este repositorio contiene los script y archivos utilizados para completar la prueba tecnica. 
 
 # Funcionamiento
-Al correr el programa main.py, se comenzara con la descarga de los archivos, se guardaran en un directorio y por ultimo se generara un archivo .csv con el resumen de todos los calculos.
+El programa está dividido en dos archivos .py, main.py y funciones.py. Al ejecutar main.py, comenzará la descarga de los archivos, se guardarán en un directorio y, finalmente, se generará un archivo .csv con el resumen de todos los cálculos.
 </p>
 
 # Librerias de Terceros Utilizadas
